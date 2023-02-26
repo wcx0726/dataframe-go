@@ -5,13 +5,14 @@ package dataframe
 import (
 	"context"
 	"errors"
+	"sync"
+
 	"golang.org/x/exp/rand"
 	"golang.org/x/sync/errgroup"
-	"sync"
 )
 
 // DataFrame allows you to handle numerous
-//series of data conveniently.
+// series of data conveniently.
 type DataFrame struct {
 	lock   sync.RWMutex
 	Series []Series
@@ -80,8 +81,7 @@ const (
 //
 // Example:
 //
-//  df.Row(5, false, dataframe.SeriesIdx|dataframe.SeriesName)
-//
+//	df.Row(5, false, dataframe.SeriesIdx|dataframe.SeriesName)
 func (df *DataFrame) Row(row int, dontReadLock bool, retOpt ...SeriesReturnOpt) map[interface{}]interface{} {
 	if !dontReadLock {
 		df.lock.RLock()
@@ -129,27 +129,26 @@ type ValuesOptions struct {
 //
 // Example:
 //
-//  iterator := df.ValuesIterator(dataframe.ValuesOptions{0, 1, true})
+//	iterator := df.ValuesIterator(dataframe.ValuesOptions{0, 1, true})
 //
-//  df.Lock()
-//  for {
-//     row, vals, _ := iterator(dataframe.SeriesName)
-//     if row == nil {
-//        break
-//     }
-//     fmt.Println(*row, vals)
-//  }
-//  df.Unlock()
+//	df.Lock()
+//	for {
+//	   row, vals, _ := iterator(dataframe.SeriesName)
+//	   if row == nil {
+//	      break
+//	   }
+//	   fmt.Println(*row, vals)
+//	}
+//	df.Unlock()
 //
-//  // OR
+//	// OR
 //
-//  df.Lock()
-//  row, vals, _ := iterator()
-//  for ; row != nil; row, vals, _ = iterator() {
-//     fmt.Println(*row, vals)
-//  }
-//  df.Unlock()
-//
+//	df.Lock()
+//	row, vals, _ := iterator()
+//	for ; row != nil; row, vals, _ = iterator() {
+//	   fmt.Println(*row, vals)
+//	}
+//	df.Unlock()
 func (df *DataFrame) ValuesIterator(opts ...ValuesOptions) func(opts ...SeriesReturnOpt) (*int, map[interface{}]interface{}, int) {
 
 	var (
@@ -485,6 +484,15 @@ func (df *DataFrame) RemoveSeries(seriesName string, opts ...Options) error {
 
 	df.Series = append(df.Series[:idx], df.Series[idx+1:]...)
 	return nil
+}
+
+// GetSeries will get a Series of the DataFrame. By wcx
+func (df *DataFrame) GetSeries(seriesName string, opts ...Options) (Series, error) {
+	idx, err := df.NameToColumn(seriesName, dontLock)
+	if err != nil {
+		return nil, errors.New(err.Error() + ": " + seriesName)
+	}
+	return df.Series[idx], nil
 }
 
 // AddSeries will add a Series to the end of the DataFrame, unless set by ColN.
